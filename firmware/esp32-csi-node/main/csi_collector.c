@@ -478,6 +478,29 @@ void csi_collector_init(void)
 
     ESP_LOGI(TAG, "Promiscuous mode enabled (MGMT-only, RuView#396)");
 
+#if defined(CONFIG_C5_5GHZ_CSI_EXPERIMENTAL)
+    /* C5-only 5 GHz CSI feasibility probe (ADR-110 spec §5).
+     *
+     * Default off. When enabled, switch the radio to a UNII-1 channel and
+     * fall back to the 2.4 GHz csi_channel if the driver refuses (likely
+     * outcome on ESP-IDF v5.4 preview). The Kconfig depends on
+     * IDF_TARGET_ESP32C5 so this block is unreachable on other targets. */
+    {
+        const int probe_ch = CONFIG_C5_5GHZ_PROBE_CHANNEL;
+        esp_err_t probe_err = esp_wifi_set_channel((uint8_t)probe_ch,
+                                                    WIFI_SECOND_CHAN_NONE);
+        if (probe_err == ESP_OK) {
+            ESP_LOGI(TAG, "[C5 5GHz] channel %d set OK", probe_ch);
+            csi_channel = (uint8_t)probe_ch;
+            s_hop_channels[0] = csi_channel;
+        } else {
+            ESP_LOGW(TAG, "[C5 5GHz] set_channel(%d) failed (%s); falling back to 2.4 GHz ch %u",
+                     probe_ch, esp_err_to_name(probe_err), (unsigned)csi_channel);
+            (void)esp_wifi_set_channel(csi_channel, WIFI_SECOND_CHAN_NONE);
+        }
+    }
+#endif  /* CONFIG_C5_5GHZ_CSI_EXPERIMENTAL */
+
 #if CONFIG_SOC_WIFI_HE_SUPPORT
     /* Wi-Fi 6 targets (e.g. ESP32-C6): wifi_csi_config_t is wifi_csi_acquire_config_t
      * (bitfields), not the legacy 802.11n bool layout used on ESP32-S3. */
