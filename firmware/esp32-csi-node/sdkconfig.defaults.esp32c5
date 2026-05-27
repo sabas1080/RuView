@@ -3,12 +3,15 @@
 # Auto-applied by ESP-IDF when CONFIG_IDF_TARGET=esp32c5.
 # Layered on top of sdkconfig.defaults — only the differences live here.
 #
-# Build:
-#   idf.py --preview set-target esp32c5
+# Build (ESP-IDF v5.5 — see note below):
+#   idf.py set-target esp32c5
 #   idf.py build
 #
-# Note: ESP-IDF v5.4 lists C5 as preview, so set-target needs --preview.
-# Subsequent commands (build, flash, monitor) do not.
+# IDF version note: this overlay is pinned to ESP-IDF v5.5+. ESP-IDF v5.4
+# was released before C5 eco2 (silicon v1.0) shipped, and its bootloader
+# rejects v1.0 chips with "Image requires chip rev <= v0.99". v5.5 ships
+# the eco2-aware bootloader. On v5.4 the build succeeds but the chip
+# refuses to boot — observed on 3c:dc:75:9f:e1:c4 (Electronic Cats C5).
 #
 # Hardware: Electronic Cats / placa propia, ESP32-C5, 8 MB flash, no PSRAM,
 # native USB-Serial/JTAG. See docs/superpowers/specs/2026-05-27-esp32c5-target-design.md.

@@ -41,13 +41,14 @@ jobs:
     name: Build firmware (${{ matrix.target }} / ${{ matrix.variant }})
     runs-on: ubuntu-latest
     container:
-      image: espressif/idf:v5.4
+      image: ${{ matrix.idf_image }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - variant: 8mb
             target: esp32s3
+            idf_image: espressif/idf:v5.4
             sdkconfig: sdkconfig.defaults
             partition_table_name: partitions_display.csv
             size_limit_kb: 1100
@@ -55,6 +56,7 @@ jobs:
             artifact_pt: partition-table.bin
           - variant: 4mb
             target: esp32s3
+            idf_image: espressif/idf:v5.4
             sdkconfig: sdkconfig.defaults.4mb
             partition_table_name: partitions_4mb.csv
             size_limit_kb: 1100
@@ -63,17 +65,20 @@ jobs:
           # ADR-110: ESP32-C6 research target (Wi-Fi 6 / 802.15.4 / TWT / LP-core)
           - variant: c6-4mb
             target: esp32c6
+            idf_image: espressif/idf:v5.4
             sdkconfig: sdkconfig.defaults
             partition_table_name: partitions_4mb.csv
             size_limit_kb: 1100
             artifact_app: esp32-csi-node-c6.bin
             artifact_pt: partition-table-c6.bin
           # ESP32-C5 bring-up target (Wi-Fi 6 dual-band 2.4/5 GHz, 8 MB flash).
+          # Pinned to ESP-IDF v5.5 because v5.4 was released before C5 eco2
+          # (silicon v1.0) and its bootloader rejects v1.0 chips with
+          # "Image requires chip rev <= v0.99". v5.5 ships the eco2-aware bootloader.
           # See docs/superpowers/specs/2026-05-27-esp32c5-target-design.md.
-          # continue-on-error is set on the build/verify steps below while
-          # ESP-IDF v5.4 C5 support is preview; removed on first-green.
           - variant: c5-8mb
             target: esp32c5
+            idf_image: espressif/idf:v5.5
             sdkconfig: sdkconfig.defaults
             partition_table_name: partitions_display.csv
             size_limit_kb: 1100
@@ -85,8 +90,8 @@ jobs:
 
       - name: Build firmware (${{ matrix.variant }})
         working-directory: firmware/esp32-csi-node
-        # ESP-IDF v5.4 has C5 in preview support; allow the c5-8mb variant to
-        # fail without blocking the matrix until we observe first-green.
+        # c5-8mb runs on IDF v5.5 (eco2-aware) but still allowed to fail
+        # while the bring-up stabilises. Remove on first-green.
         continue-on-error: ${{ matrix.variant == 'c5-8mb' }}
         run: |
           . $IDF_PATH/export.sh
@@ -96,7 +101,13 @@ jobs:
           if [ "${{ matrix.variant }}" = "4mb" ]; then
             cp "${{ matrix.sdkconfig }}" sdkconfig.defaults
           fi
-          idf.py set-target ${{ matrix.target }}
+          # C5 on IDF v5.4 needed --preview; on v5.5 it is GA. Keep --preview
+          # opportunistically — it's a no-op once the target is GA in that IDF.
+          if [ "${{ matrix.target }}" = "esp32c5" ]; then
+            idf.py --preview set-target ${{ matrix.target }} || idf.py set-target ${{ matrix.target }}
+          else
+            idf.py set-target ${{ matrix.target }}
+          fi
           idf.py build
 
       - name: Build and run host-side ADR-110 unit tests
