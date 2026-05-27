@@ -22,7 +22,7 @@
 
 #include "sdkconfig.h"
 
-#if defined(CONFIG_IDF_TARGET_ESP32C6) && defined(CONFIG_C6_SOFTAP_HE_ENABLE)
+#if (defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5)) && defined(CONFIG_C6_SOFTAP_HE_ENABLE)
 
 #include "c6_softap_he.h"
 #include "esp_log.h"
@@ -174,4 +174,4 @@ esp_err_t c6_softap_he_start(uint8_t *out_channel)
 bool c6_softap_he_is_up(void)        { return s_started; }
 uint8_t c6_softap_he_sta_count(void) { return s_sta_count; }
 
-#endif  /* CONFIG_IDF_TARGET_ESP32C6 && CONFIG_C6_SOFTAP_HE_ENABLE */
+#endif  /* (CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32C5) && CONFIG_C6_SOFTAP_HE_ENABLE */

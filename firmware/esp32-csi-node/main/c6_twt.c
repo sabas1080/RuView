@@ -16,7 +16,7 @@
 #include "sdkconfig.h"
 #include "soc/soc_caps.h"
 
-#if defined(CONFIG_IDF_TARGET_ESP32C6) && SOC_WIFI_HE_SUPPORT
+#if (defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5)) && SOC_WIFI_HE_SUPPORT
 
 #include "c6_twt.h"
 #include "esp_log.h"
@@ -152,4 +152,4 @@ bool c6_twt_is_active(void)
     return s_active;
 }
 
-#endif  /* CONFIG_IDF_TARGET_ESP32C6 && SOC_WIFI_HE_SUPPORT */
+#endif  /* (CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32C5) && SOC_WIFI_HE_SUPPORT */

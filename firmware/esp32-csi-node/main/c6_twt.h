@@ -25,7 +25,7 @@ extern "C" {
 
 #include "soc/soc_caps.h"
 
-#if defined(CONFIG_IDF_TARGET_ESP32C6) && SOC_WIFI_HE_SUPPORT
+#if (defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5)) && SOC_WIFI_HE_SUPPORT
 
 #include "esp_err.h"
 #include <stdint.h>
@@ -68,7 +68,7 @@ static inline esp_err_t c6_twt_setup(uint32_t a, uint32_t b) { (void)a; (void)b;
 static inline void      c6_twt_teardown(void) { }
 static inline bool      c6_twt_is_active(void) { return false; }
 
-#endif  /* CONFIG_IDF_TARGET_ESP32C6 && SOC_WIFI_HE_SUPPORT */
+#endif  /* (CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32C5) && SOC_WIFI_HE_SUPPORT */
 
 #ifdef __cplusplus
 }

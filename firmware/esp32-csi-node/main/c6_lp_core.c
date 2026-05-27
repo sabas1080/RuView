@@ -23,7 +23,7 @@
 
 #include "sdkconfig.h"
 
-#if defined(CONFIG_IDF_TARGET_ESP32C6) && defined(CONFIG_ULP_COPROC_TYPE_LP_CORE)
+#if (defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5)) && defined(CONFIG_ULP_COPROC_TYPE_LP_CORE)
 
 #include "c6_lp_core.h"
 #include "esp_log.h"
@@ -193,4 +193,4 @@ uint32_t c6_lp_core_motion_count(void) { return 0; }
 uint32_t c6_lp_core_poll_count(void)   { return 0; }
 #endif
 
-#endif  /* CONFIG_IDF_TARGET_ESP32C6 && CONFIG_ULP_COPROC_TYPE_LP_CORE */
+#endif  /* (CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32C5) && CONFIG_ULP_COPROC_TYPE_LP_CORE */
