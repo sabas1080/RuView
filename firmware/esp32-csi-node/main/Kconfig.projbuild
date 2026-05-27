@@ -416,6 +416,25 @@ menu "Wi-Fi 6 / 802.15.4 / LP-core capabilities (ADR-110)"
             observed 10 fps CSI rate. Raise for less wire overhead;
             lower for tighter multistatic alignment windows.
 
+    config C5_5GHZ_CSI_EXPERIMENTAL
+        bool "Probe CSI capture on 5 GHz (C5 only, experimental)"
+        default n
+        depends on IDF_TARGET_ESP32C5
+        help
+            Switches the CSI capture channel to a UNII-1 channel after
+            promiscuous mode is enabled. Reports whether wifi_csi_rx_cb_t
+            fires in the 5 GHz band on the currently installed ESP-IDF.
+            Falls back to the configured 2.4 GHz WIFI_CHANNEL if the
+            driver returns ESP_ERR_NOT_SUPPORTED or ESP_ERR_INVALID_ARG.
+
+    config C5_5GHZ_PROBE_CHANNEL
+        int "5 GHz probe channel"
+        default 36
+        range 36 48
+        depends on C5_5GHZ_CSI_EXPERIMENTAL
+        help
+            UNII-1 channels: 36, 40, 44, 48.
+
 endmenu
 
 menu "ADR-018 frame extensions (ADR-110)"
