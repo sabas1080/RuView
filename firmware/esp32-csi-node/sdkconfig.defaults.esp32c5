@@ -1,0 +1,74 @@
+# ESP32-C5 CSI Node — Target overlay (companion to ADR-110)
+#
+# Auto-applied by ESP-IDF when CONFIG_IDF_TARGET=esp32c5.
+# Layered on top of sdkconfig.defaults — only the differences live here.
+#
+# Build (ESP-IDF v5.5 — see note below):
+#   idf.py set-target esp32c5
+#   idf.py build
+#
+# IDF version note: this overlay is pinned to ESP-IDF v5.5+. ESP-IDF v5.4
+# was released before C5 eco2 (silicon v1.0) shipped, and its bootloader
+# rejects v1.0 chips with "Image requires chip rev <= v0.99". v5.5 ships
+# the eco2-aware bootloader. On v5.4 the build succeeds but the chip
+# refuses to boot — observed on 3c:dc:75:9f:e1:c4 (Electronic Cats C5).
+#
+# Hardware: Electronic Cats / placa propia, ESP32-C5, 8 MB flash, no PSRAM,
+# native USB-Serial/JTAG. See docs/superpowers/specs/2026-05-27-esp32c5-target-design.md.
+
+# ── Target ──
+CONFIG_IDF_TARGET="esp32c5"
+
+# ── Flash & partitions (8 MB) ──
+# Reuse the S3 8 MB partition table verbatim — partitions_display.csv is a
+# chip-agnostic CSV; the "display" in the filename is historical (ADR-045).
+# Rename to partitions_8mb.csv is a follow-up.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_display.csv"
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="8MB"
+
+# ── CSI (required) ──
+CONFIG_ESP_WIFI_CSI_ENABLED=y
+
+# ── Wi-Fi 6 / WPA3 ──
+# SOC_WIFI_HE_SUPPORT is a SoC capability, auto-on for C5.
+CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=y
+
+# ── 802.15.4 (raw, no OpenThread) ──
+# Same rationale as the C6 overlay: raw 802.15.4 for the private mesh
+# timesync protocol, OpenThread off because its presence broke the
+# weak-symbol overrides for receive_done/transmit_done.
+CONFIG_IEEE802154_ENABLED=y
+CONFIG_OPENTHREAD_ENABLED=n
+CONFIG_C6_TIMESYNC_CHANNEL=26
+
+# ── LP-core (deep-sleep coprocessor) ──
+CONFIG_ULP_COPROC_ENABLED=y
+CONFIG_ULP_COPROC_TYPE_LP_CORE=y
+CONFIG_ULP_COPROC_RESERVE_MEM=8192
+
+# ── No display, no WASM, no mmWave on the C5 bring-up target ──
+# CONFIG_DISPLAY_ENABLE is not set
+# CONFIG_WASM_ENABLE is not set
+
+# ── Compiler ──
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# ── Logging ──
+CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# ── lwIP / FreeRTOS — same as S3/C6 path ──
+CONFIG_LWIP_SO_RCVBUF=y
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+CONFIG_FREERTOS_TIMER_TASK_STACK_DEPTH=8192
+
+# ── Power: C5 supports 240 MHz vs C6's 160 MHz ──
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240
+
+# ── 5 GHz CSI feasibility probe (off by default) ──
+# Enable by hand for the experiment in T8. Leaves the radio on the
+# Kconfig-configured 2.4 GHz channel when off.
+# CONFIG_C5_5GHZ_CSI_EXPERIMENTAL is not set

@@ -21,6 +21,7 @@
 #include "esp_wifi.h"
 #include "esp_mac.h"
 #include "esp_timer.h"
+#include "esp_idf_version.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/timers.h"
 #include <string.h>
@@ -144,11 +145,23 @@ static void on_recv(const uint8_t *src_mac, const uint8_t *data, int len)
     }
 }
 
+/* ESP-NOW send callback signature changed in ESP-IDF v5.5:
+ *   v5.4 and earlier: void (*)(const uint8_t *mac, esp_now_send_status_t)
+ *   v5.5 and later:   void (*)(const wifi_tx_info_t *info, esp_now_send_status_t)
+ * The mac is unused either way; only the status matters here. */
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0)
+static void on_send(const wifi_tx_info_t *info, esp_now_send_status_t status)
+{
+    (void)info;
+    if (status != ESP_NOW_SEND_SUCCESS) s_tx_fail++;
+}
+#else
 static void on_send(const uint8_t *mac, esp_now_send_status_t status)
 {
     (void)mac;
     if (status != ESP_NOW_SEND_SUCCESS) s_tx_fail++;
 }
+#endif
 
 static void beacon_timer_cb(TimerHandle_t t)
 {

@@ -115,10 +115,29 @@ static void wifi_init_sta(void)
         wifi_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
     }
 
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+    /* C5 with WPA3-SAE APs (e.g. WiFi 6 routers in mixed WPA2/WPA3 mode):
+     * the default WPA2_PSK threshold + no SAE config silently fails the
+     * assoc step on IDF v5.5 preview. Explicitly accept both WPA2 and WPA3
+     * with H2E SAE and capable PMF so the driver completes the handshake.
+     * threshold.rssi must be explicitly set to -127 — leaving it at the
+     * designated-initializer default of 0 makes v5.5 reject every AP with
+     * reason=211 (NO_AP_FOUND_IN_RSSI_THRESHOLD).
+     * Gated by IDF_TARGET_ESP32C5 to avoid perturbing the S3/C6 production
+     * paths that already work against WPA2-only APs. */
+    if (strlen((char *)wifi_config.sta.password) > 0) {
+        wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+        wifi_config.sta.threshold.rssi = -127;
+        wifi_config.sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
+        wifi_config.sta.pmf_cfg.capable = true;
+        wifi_config.sta.pmf_cfg.required = false;
+    }
+#endif
+
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
 
-#if defined(CONFIG_IDF_TARGET_ESP32C6) && defined(CONFIG_C6_SOFTAP_HE_ENABLE)
+#if (defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5)) && defined(CONFIG_C6_SOFTAP_HE_ENABLE)
     /* ADR-110 B1/B2 cheap-unblock: bring up a soft-AP that advertises HE +
      * TWT Responder=1 so a second C6 board can negotiate iTWT against
      * this node. c6_softap_he_start() switches the mode to AP+STA. */
@@ -175,33 +194,40 @@ void app_main(void)
 
     /* Turn off onboard WS2812 LED.
      * S3 dev boards put the LED on GPIO 38; C6 dev boards on GPIO 8.
-     * On C6, GPIO 38 doesn't exist (only 0-30) — gate the init by target. */
+     * C5 (Electronic Cats board) LED GPIO unconfirmed at port time — skip
+     * the RMT init entirely on C5 to avoid the noisy `rmt: invalid GPIO 38`
+     * error from the default fallback. Revisit once the C5 board pinout
+     * is confirmed and add the right GPIO under another #elif. */
 #if defined(CONFIG_IDF_TARGET_ESP32C6)
     const int led_gpio = 8;
+#elif defined(CONFIG_IDF_TARGET_ESP32C5)
+    const int led_gpio = -1;
 #else
     const int led_gpio = 38;
 #endif
-    led_strip_handle_t led_strip;
-    led_strip_config_t strip_config = {
-        .strip_gpio_num = led_gpio,
-        .max_leds = 1,
-        .led_model = LED_MODEL_WS2812,
-        .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB,
-        .flags.invert_out = false,
-    };
-    led_strip_rmt_config_t rmt_config = {
-        .resolution_hz = 10 * 1000 * 1000, // 10MHz
-        .flags.with_dma = false,
-    };
-    if (led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip) == ESP_OK) {
-        led_strip_clear(led_strip);
+    if (led_gpio >= 0) {
+        led_strip_handle_t led_strip;
+        led_strip_config_t strip_config = {
+            .strip_gpio_num = led_gpio,
+            .max_leds = 1,
+            .led_model = LED_MODEL_WS2812,
+            .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB,
+            .flags.invert_out = false,
+        };
+        led_strip_rmt_config_t rmt_config = {
+            .resolution_hz = 10 * 1000 * 1000, // 10MHz
+            .flags.with_dma = false,
+        };
+        if (led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip) == ESP_OK) {
+            led_strip_clear(led_strip);
+        }
     }
 
     /* ADR-110 P4: 802.15.4 mesh time-sync (C6 only).
      * Initialized BEFORE WiFi so it's available even when WiFi STA can't
      * connect — the radios are physically independent on the C6.
      * No-op on S3 (the helper compiles to an empty inline stub). */
-#if defined(CONFIG_IDF_TARGET_ESP32C6) && defined(CONFIG_C6_TIMESYNC_ENABLE)
+#if (defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5)) && defined(CONFIG_C6_TIMESYNC_ENABLE)
     esp_err_t ts_ret = c6_timesync_init(CONFIG_C6_TIMESYNC_CHANNEL);
     if (ts_ret != ESP_OK) {
         ESP_LOGW(TAG, "c6_timesync_init failed: %s (continuing without 15.4 sync)",
@@ -212,7 +238,7 @@ void app_main(void)
     /* ADR-110 P5: Optionally arm LP-core wake-on-motion (C6 only, opt-in).
      * Default off — only nodes flashed for battery-powered seed duty enable
      * this in menuconfig. */
-#if defined(CONFIG_IDF_TARGET_ESP32C6) && defined(CONFIG_C6_LP_CORE_ENABLE)
+#if (defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5)) && defined(CONFIG_C6_LP_CORE_ENABLE)
     if (c6_lp_core_was_motion_wake()) {
         ESP_LOGI(TAG, "boot cause: LP-core motion wake (running CSI burst)");
     }
@@ -263,7 +289,7 @@ void app_main(void)
      * No-op on S3 (the helper compiles to an empty inline stub). On C6
      * the AP may NACK — the helper logs and falls back to opportunistic.
      * Called only after WiFi STA connect (wifi_init_sta blocks until then). */
-#if defined(CONFIG_IDF_TARGET_ESP32C6) && defined(CONFIG_C6_TWT_ENABLE)
+#if (defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5)) && defined(CONFIG_C6_TWT_ENABLE)
     c6_twt_setup_default();
 #endif
 

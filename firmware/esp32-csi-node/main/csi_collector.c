@@ -223,7 +223,7 @@ size_t csi_serialize_frame(const wifi_csi_info_t *info, uint8_t *buf, size_t buf
      * §A0.10). OR them together so frames signal sync from whichever
      * transport is alive on this node. Host can pair against the sync
      * packet (§A0.12) once it sees this bit. */
-#if defined(CONFIG_IDF_TARGET_ESP32C6) && defined(CONFIG_C6_TIMESYNC_ENABLE)
+#if (defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5)) && defined(CONFIG_C6_TIMESYNC_ENABLE)
     if (c6_timesync_is_valid()) flags |= (1 << 4);  /* 15.4 sync valid */
 #endif
     if (c6_sync_espnow_is_valid()) flags |= (1 << 4);  /* ESP-NOW sync valid (D1 workaround) */
@@ -478,6 +478,45 @@ void csi_collector_init(void)
 
     ESP_LOGI(TAG, "Promiscuous mode enabled (MGMT-only, RuView#396)");
 
+    /* Lock the promiscuous radio to the resolved csi_channel. Without this,
+     * the radio follows the STA's current connection — on dual-radio same-SSID
+     * networks the STA roams (e.g. 2.4 GHz ch 9 ↔ 5 GHz ch 157) every few
+     * seconds and CSI callbacks go silent during each transition. Locking
+     * makes promiscuous behaviour deterministic and decouples sensing from
+     * STA roaming dynamics. */
+    {
+        esp_err_t ch_err = esp_wifi_set_channel(csi_channel, WIFI_SECOND_CHAN_NONE);
+        if (ch_err != ESP_OK) {
+            ESP_LOGW(TAG, "esp_wifi_set_channel(%u) failed: %s",
+                     (unsigned)csi_channel, esp_err_to_name(ch_err));
+        } else {
+            ESP_LOGI(TAG, "Promiscuous radio locked to channel %u", (unsigned)csi_channel);
+        }
+    }
+
+#if defined(CONFIG_C5_5GHZ_CSI_EXPERIMENTAL)
+    /* C5-only 5 GHz CSI feasibility probe (ADR-110 spec §5).
+     *
+     * Default off. When enabled, switch the radio to a UNII-1 channel and
+     * fall back to the 2.4 GHz csi_channel if the driver refuses (likely
+     * outcome on ESP-IDF v5.4 preview). The Kconfig depends on
+     * IDF_TARGET_ESP32C5 so this block is unreachable on other targets. */
+    {
+        const int probe_ch = CONFIG_C5_5GHZ_PROBE_CHANNEL;
+        esp_err_t probe_err = esp_wifi_set_channel((uint8_t)probe_ch,
+                                                    WIFI_SECOND_CHAN_NONE);
+        if (probe_err == ESP_OK) {
+            ESP_LOGI(TAG, "[C5 5GHz] channel %d set OK", probe_ch);
+            csi_channel = (uint8_t)probe_ch;
+            s_hop_channels[0] = csi_channel;
+        } else {
+            ESP_LOGW(TAG, "[C5 5GHz] set_channel(%d) failed (%s); falling back to 2.4 GHz ch %u",
+                     probe_ch, esp_err_to_name(probe_err), (unsigned)csi_channel);
+            (void)esp_wifi_set_channel(csi_channel, WIFI_SECOND_CHAN_NONE);
+        }
+    }
+#endif  /* CONFIG_C5_5GHZ_CSI_EXPERIMENTAL */
+
 #if CONFIG_SOC_WIFI_HE_SUPPORT
     /* Wi-Fi 6 targets (e.g. ESP32-C6): wifi_csi_config_t is wifi_csi_acquire_config_t
      * (bitfields), not the legacy 802.11n bool layout used on ESP32-S3. */
@@ -491,7 +530,12 @@ void csi_collector_init(void)
     csi_config.acquire_csi_mu = 1U;
     csi_config.acquire_csi_dcm = 1U;
     csi_config.acquire_csi_beamformed = 1U;
-#if CONFIG_SOC_WIFI_MAC_VERSION_NUM >= 3
+    /* The wifi_csi_acquire_config_t struct in esp_wifi_he_types.h is gated by
+     * SOC_WIFI_MAC_VERSION_NUM == 3 (NOT >=) — distinct field set between v3
+     * and others (v3 has force_lltf/vht/he_stbc_mode; else has he_stbc).
+     * Mirror that gate exactly so a future MAC v4 doesn't write to fields
+     * that no longer exist. C5 reports v3, C6 reports v2 (verified in IDF v5.5). */
+#if CONFIG_SOC_WIFI_MAC_VERSION_NUM == 3
     csi_config.acquire_csi_force_lltf = 1U;
     csi_config.acquire_csi_vht = 1U;
     csi_config.acquire_csi_he_stbc_mode = ESP_CSI_ACQUIRE_STBC_SAMPLE_HELTFS;
