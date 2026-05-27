@@ -115,6 +115,25 @@ static void wifi_init_sta(void)
         wifi_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
     }
 
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+    /* C5 with WPA3-SAE APs (e.g. WiFi 6 routers in mixed WPA2/WPA3 mode):
+     * the default WPA2_PSK threshold + no SAE config silently fails the
+     * assoc step on IDF v5.5 preview. Explicitly accept both WPA2 and WPA3
+     * with H2E SAE and capable PMF so the driver completes the handshake.
+     * threshold.rssi must be explicitly set to -127 — leaving it at the
+     * designated-initializer default of 0 makes v5.5 reject every AP with
+     * reason=211 (NO_AP_FOUND_IN_RSSI_THRESHOLD).
+     * Gated by IDF_TARGET_ESP32C5 to avoid perturbing the S3/C6 production
+     * paths that already work against WPA2-only APs. */
+    if (strlen((char *)wifi_config.sta.password) > 0) {
+        wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+        wifi_config.sta.threshold.rssi = -127;
+        wifi_config.sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
+        wifi_config.sta.pmf_cfg.capable = true;
+        wifi_config.sta.pmf_cfg.required = false;
+    }
+#endif
+
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
 
