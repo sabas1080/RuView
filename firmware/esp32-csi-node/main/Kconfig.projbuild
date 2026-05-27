@@ -287,8 +287,8 @@ menu "WASM Programmable Sensing (ADR-040)"
 
 endmenu
 
-menu "ESP32-C6 capabilities (ADR-110)"
-    depends on IDF_TARGET_ESP32C6
+menu "Wi-Fi 6 / 802.15.4 / LP-core capabilities (ADR-110)"
+    depends on IDF_TARGET_ESP32C6 || IDF_TARGET_ESP32C5
 
     config C6_TWT_ENABLE
         bool "Enable TWT (Target Wake Time) negotiation"
