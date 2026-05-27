@@ -478,6 +478,22 @@ void csi_collector_init(void)
 
     ESP_LOGI(TAG, "Promiscuous mode enabled (MGMT-only, RuView#396)");
 
+    /* Lock the promiscuous radio to the resolved csi_channel. Without this,
+     * the radio follows the STA's current connection — on dual-radio same-SSID
+     * networks the STA roams (e.g. 2.4 GHz ch 9 ↔ 5 GHz ch 157) every few
+     * seconds and CSI callbacks go silent during each transition. Locking
+     * makes promiscuous behaviour deterministic and decouples sensing from
+     * STA roaming dynamics. */
+    {
+        esp_err_t ch_err = esp_wifi_set_channel(csi_channel, WIFI_SECOND_CHAN_NONE);
+        if (ch_err != ESP_OK) {
+            ESP_LOGW(TAG, "esp_wifi_set_channel(%u) failed: %s",
+                     (unsigned)csi_channel, esp_err_to_name(ch_err));
+        } else {
+            ESP_LOGI(TAG, "Promiscuous radio locked to channel %u", (unsigned)csi_channel);
+        }
+    }
+
 #if defined(CONFIG_C5_5GHZ_CSI_EXPERIMENTAL)
     /* C5-only 5 GHz CSI feasibility probe (ADR-110 spec §5).
      *
@@ -514,7 +530,12 @@ void csi_collector_init(void)
     csi_config.acquire_csi_mu = 1U;
     csi_config.acquire_csi_dcm = 1U;
     csi_config.acquire_csi_beamformed = 1U;
-#if CONFIG_SOC_WIFI_MAC_VERSION_NUM >= 3
+    /* The wifi_csi_acquire_config_t struct in esp_wifi_he_types.h is gated by
+     * SOC_WIFI_MAC_VERSION_NUM == 3 (NOT >=) — distinct field set between v3
+     * and others (v3 has force_lltf/vht/he_stbc_mode; else has he_stbc).
+     * Mirror that gate exactly so a future MAC v4 doesn't write to fields
+     * that no longer exist. C5 reports v3, C6 reports v2 (verified in IDF v5.5). */
+#if CONFIG_SOC_WIFI_MAC_VERSION_NUM == 3
     csi_config.acquire_csi_force_lltf = 1U;
     csi_config.acquire_csi_vht = 1U;
     csi_config.acquire_csi_he_stbc_mode = ESP_CSI_ACQUIRE_STBC_SAMPLE_HELTFS;
