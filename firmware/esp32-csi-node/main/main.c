@@ -194,26 +194,33 @@ void app_main(void)
 
     /* Turn off onboard WS2812 LED.
      * S3 dev boards put the LED on GPIO 38; C6 dev boards on GPIO 8.
-     * On C6, GPIO 38 doesn't exist (only 0-30) — gate the init by target. */
+     * C5 (Electronic Cats board) LED GPIO unconfirmed at port time — skip
+     * the RMT init entirely on C5 to avoid the noisy `rmt: invalid GPIO 38`
+     * error from the default fallback. Revisit once the C5 board pinout
+     * is confirmed and add the right GPIO under another #elif. */
 #if defined(CONFIG_IDF_TARGET_ESP32C6)
     const int led_gpio = 8;
+#elif defined(CONFIG_IDF_TARGET_ESP32C5)
+    const int led_gpio = -1;
 #else
     const int led_gpio = 38;
 #endif
-    led_strip_handle_t led_strip;
-    led_strip_config_t strip_config = {
-        .strip_gpio_num = led_gpio,
-        .max_leds = 1,
-        .led_model = LED_MODEL_WS2812,
-        .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB,
-        .flags.invert_out = false,
-    };
-    led_strip_rmt_config_t rmt_config = {
-        .resolution_hz = 10 * 1000 * 1000, // 10MHz
-        .flags.with_dma = false,
-    };
-    if (led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip) == ESP_OK) {
-        led_strip_clear(led_strip);
+    if (led_gpio >= 0) {
+        led_strip_handle_t led_strip;
+        led_strip_config_t strip_config = {
+            .strip_gpio_num = led_gpio,
+            .max_leds = 1,
+            .led_model = LED_MODEL_WS2812,
+            .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB,
+            .flags.invert_out = false,
+        };
+        led_strip_rmt_config_t rmt_config = {
+            .resolution_hz = 10 * 1000 * 1000, // 10MHz
+            .flags.with_dma = false,
+        };
+        if (led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip) == ESP_OK) {
+            led_strip_clear(led_strip);
+        }
     }
 
     /* ADR-110 P4: 802.15.4 mesh time-sync (C6 only).
