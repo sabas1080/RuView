@@ -68,16 +68,30 @@ jobs:
             size_limit_kb: 1100
             artifact_app: esp32-csi-node-c6.bin
             artifact_pt: partition-table-c6.bin
+          # ESP32-C5 bring-up target (Wi-Fi 6 dual-band 2.4/5 GHz, 8 MB flash).
+          # See docs/superpowers/specs/2026-05-27-esp32c5-target-design.md.
+          # continue-on-error is set on the build/verify steps below while
+          # ESP-IDF v5.4 C5 support is preview; removed on first-green.
+          - variant: c5-8mb
+            target: esp32c5
+            sdkconfig: sdkconfig.defaults
+            partition_table_name: partitions_display.csv
+            size_limit_kb: 1100
+            artifact_app: esp32-csi-node-c5.bin
+            artifact_pt: partition-table-c5.bin
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Build firmware (${{ matrix.variant }})
         working-directory: firmware/esp32-csi-node
+        # ESP-IDF v5.4 has C5 in preview support; allow the c5-8mb variant to
+        # fail without blocking the matrix until we observe first-green.
+        continue-on-error: ${{ matrix.variant == 'c5-8mb' }}
         run: |
           . $IDF_PATH/export.sh
           # 4mb variant supplies its own sdkconfig.defaults overlay.
-          # c6-4mb variant relies on the auto-applied sdkconfig.defaults.esp32c6
+          # c6-4mb and c5-8mb rely on the auto-applied sdkconfig.defaults.$TARGET
           # overlay (ESP-IDF auto-loads sdkconfig.defaults.$TARGET when present).
           if [ "${{ matrix.variant }}" = "4mb" ]; then
             cp "${{ matrix.sdkconfig }}" sdkconfig.defaults
@@ -94,6 +108,7 @@ jobs:
 
       - name: Verify binary size (< ${{ matrix.size_limit_kb }} KB gate)
         working-directory: firmware/esp32-csi-node
+        continue-on-error: ${{ matrix.variant == 'c5-8mb' }}
         run: |
           BIN=build/esp32-csi-node.bin
           SIZE=$(stat -c%s "$BIN")
@@ -108,6 +123,7 @@ jobs:
 
       - name: Verify flash image integrity
         working-directory: firmware/esp32-csi-node
+        continue-on-error: ${{ matrix.variant == 'c5-8mb' }}
         run: |
           ERRORS=0
           BIN=build/esp32-csi-node.bin
